@@ -237,7 +237,7 @@ export default function ChessBoard() {
   };
 
   return (
-    <div className="relative aspect-square w-full max-w-[580px] overflow-hidden rounded-2xl border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 shadow-2xl">
+    <div className={`relative aspect-square w-full max-w-[580px] overflow-hidden rounded-2xl border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 shadow-2xl ${gameStatus === 'checkmate' ? 'shake-animate' : ''}`}>
       <Chessboard
         options={{
           position: fen,

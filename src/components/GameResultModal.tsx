@@ -2,7 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useChessStore } from '../lib/store';
-import { Award, RefreshCw, Home, Compass, Trophy } from 'lucide-react';
+import { Award, RefreshCw, Home, Compass, Trophy, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -15,9 +15,29 @@ export default function GameResultModal({ onReturnHome }: GameResultModalProps) 
 
   const isGameOver = ['checkmate', 'stalemate', 'draw', 'timeout', 'resigned'].includes(gameStatus);
 
-  // Trigger confetti if game has ended in a win for the user
+  const [showDelayedModal, setShowDelayedModal] = React.useState(false);
+  const [isClosedByUser, setIsClosedByUser] = React.useState(false);
+
   useEffect(() => {
     if (isGameOver) {
+      if (['checkmate', 'stalemate', 'draw'].includes(gameStatus)) {
+        const timer = setTimeout(() => {
+          setShowDelayedModal(true);
+        }, 3000); // 3 seconds delay for checkmate and draws
+        return () => clearTimeout(timer);
+      } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setShowDelayedModal(true);
+      }
+    } else {
+      setShowDelayedModal(false);
+      setIsClosedByUser(false);
+    }
+  }, [isGameOver, gameStatus]);
+
+  // Trigger confetti if game has ended in a win for the user
+  useEffect(() => {
+    if (showDelayedModal) {
       const userWon =
         (gameMode === 'vs-computer' && winner === 'white') ||
         (gameMode === 'vs-friend' && (winner === 'white' || winner === 'black'));
@@ -46,9 +66,24 @@ export default function GameResultModal({ onReturnHome }: GameResultModalProps) 
         return () => clearInterval(interval);
       }
     }
-  }, [isGameOver, gameMode, winner]);
+  }, [showDelayedModal, gameMode, winner]);
 
-  if (!isGameOver) return null;
+  if (isClosedByUser) {
+    return (
+      <motion.button
+        initial={{ opacity: 0, scale: 0.8, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.8, y: 20 }}
+        className="fixed bottom-6 right-6 z-100 flex items-center gap-2 rounded-full border border-zinc-300 dark:border-zinc-800 bg-zinc-50/90 dark:bg-zinc-950/90 backdrop-blur-md px-4.5 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 shadow-xl hover:border-zinc-400 dark:border-zinc-700 hover:text-zinc-900 dark:text-white transition duration-200 active:scale-95 select-none"
+        onClick={() => setIsClosedByUser(false)}
+      >
+        <Trophy className="h-4 w-4 text-emerald-500 animate-pulse" />
+        Show Results
+      </motion.button>
+    );
+  }
+
+  if (!showDelayedModal) return null;
 
   // Format result messages
   let title = 'Game Over';
@@ -91,6 +126,14 @@ export default function GameResultModal({ onReturnHome }: GameResultModalProps) 
           transition={{ type: 'spring', damping: 25, stiffness: 210 }}
           className="w-full max-w-md overflow-hidden rounded-3xl border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-6 shadow-2xl relative"
         >
+          {/* Close button */}
+          <button
+            onClick={() => setIsClosedByUser(true)}
+            className="absolute top-4 right-4 rounded-xl p-1.5 text-zinc-400 hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-300 hover:bg-zinc-200/50 dark:hover:bg-zinc-900/50 transition duration-200 z-20"
+            title="Close results overlay"
+          >
+            <X className="h-5 w-5" />
+          </button>
           {/* Decorative glows */}
           <div className={`absolute -top-12 -left-12 w-32 h-32 rounded-full blur-3xl opacity-20 bg-emerald-500`} />
           <div className={`absolute -bottom-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-20 bg-blue-500`} />

@@ -5,7 +5,20 @@ import { Chess } from 'chess.js';
 export type GameMode = 'vs-computer' | 'vs-friend' | null;
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert';
 export type GameStatus = 'setup' | 'playing' | 'checkmate' | 'stalemate' | 'draw' | 'timeout' | 'resigned';
+export type DrawReason = 'stalemate' | 'threefold' | 'insufficient' | 'fifty-moves' | null;
 export type Winner = 'white' | 'black' | 'draw' | null;
+
+export interface MatchHistoryEntry {
+  id: string;
+  date: string;
+  gameMode: GameMode;
+  difficulty?: Difficulty;
+  whitePlayer: string;
+  blackPlayer: string;
+  winner: Winner;
+  endStatus: GameStatus;
+  movesCount: number;
+}
 
 export interface MoveRecord {
   move: string;      // e.g., "e4"
@@ -14,6 +27,7 @@ export interface MoveRecord {
   to: string;        // e.g., "e4"
   isCapture: boolean;
   isCheck: boolean;
+  promotion?: string;
 }
 
 export interface GameSettings {
@@ -36,7 +50,8 @@ interface ChessState {
   boardOrientation: 'white' | 'black';
   gameStatus: GameStatus;
   winner: Winner;
-  
+  drawReason: DrawReason;
+
   // FEN and history
   fen: string;
   moveHistory: MoveRecord[];
@@ -72,10 +87,47 @@ interface ChessState {
   updateSettings: (settings: Partial<GameSettings>) => void;
   decrementTimer: (player: 'white' | 'black', amount?: number) => void;
   clearStats: () => void;
+  matchHistory: MatchHistoryEntry[];
+  clearMatchHistory: () => void;
 }
 
 // Temporary internal chess instance to validate moves
 let localChess = new Chess();
+
+const createMatchHistoryEntry = (
+  gameMode: GameMode,
+  difficulty: Difficulty,
+  boardOrientation: 'white' | 'black',
+  winner: Winner,
+  endStatus: GameStatus,
+  movesCount: number
+): MatchHistoryEntry => {
+  const getPlayerName = (color: 'w' | 'b') => {
+    if (gameMode === 'vs-computer') {
+      if (color === 'w') return boardOrientation === 'white' ? 'You' : `Computer (${difficulty})`;
+      else return boardOrientation === 'black' ? 'You' : `Computer (${difficulty})`;
+    }
+    return color === 'w' ? 'Player 1 (White)' : 'Player 2 (Black)';
+  };
+
+  return {
+    id: Math.random().toString(36).substring(2, 9),
+    date: new Date().toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    gameMode,
+    difficulty,
+    whitePlayer: getPlayerName('w'),
+    blackPlayer: getPlayerName('b'),
+    winner,
+    endStatus,
+    movesCount,
+  };
+};
 
 export const useChessStore = create<ChessState>()(
   persist(
@@ -86,6 +138,7 @@ export const useChessStore = create<ChessState>()(
       boardOrientation: 'white',
       gameStatus: 'setup',
       winner: null,
+      drawReason: null,
       fen: localChess.fen(),
       moveHistory: [],
       currentMoveIndex: -1,
@@ -110,6 +163,9 @@ export const useChessStore = create<ChessState>()(
         vsFriend: { whiteWin: 0, blackWin: 0, draw: 0 },
       },
 
+      matchHistory: [],
+      clearMatchHistory: () => set({ matchHistory: [] }),
+
       onSoundTrigger: null,
 
       // Actions
@@ -118,13 +174,14 @@ export const useChessStore = create<ChessState>()(
       startGame: (mode, timerMinutes, diff = 'medium') => {
         localChess = new Chess();
         const initialSeconds = timerMinutes ? timerMinutes * 60 : 0;
-        
+
         set({
           gameMode: mode,
           difficulty: diff,
           boardOrientation: 'white',
           gameStatus: 'playing',
           winner: null,
+          drawReason: null,
           fen: localChess.fen(),
           moveHistory: [],
           currentMoveIndex: -1,
@@ -138,7 +195,7 @@ export const useChessStore = create<ChessState>()(
       },
 
       makeMove: (from, to, promotion = 'q') => {
-        const { moveHistory, currentMoveIndex, gameStatus, onSoundTrigger, settings, gameMode, stats } = get();
+        const { moveHistory, currentMoveIndex, gameStatus, onSoundTrigger, settings, gameMode, stats, difficulty, boardOrientation } = get();
         if (gameStatus !== 'playing') return false;
 
         // If viewing history, do not allow making moves to prevent truncating history
@@ -147,12 +204,21 @@ export const useChessStore = create<ChessState>()(
           return false;
         }
 
-        // Synchronize localChess to the currently active move history point
+        // Reconstruct activeChess state from beginning of moveHistory up to currentMoveIndex
+        // to ensure that the board's internal position history is intact for threefold repetition check.
         const activeChess = new Chess();
-        if (currentMoveIndex === -1) {
-          activeChess.reset();
-        } else {
-          activeChess.load(moveHistory[currentMoveIndex].fen);
+        for (let i = 0; i <= currentMoveIndex; i++) {
+          const record = moveHistory[i];
+          try {
+            activeChess.move({
+              from: record.from,
+              to: record.to,
+              promotion: record.promotion || 'q'
+            });
+          } catch {
+            // Fallback to loading FEN if move replay fails
+            activeChess.load(record.fen);
+          }
         }
 
         const isWhiteTurn = activeChess.turn() === 'w';
@@ -184,6 +250,7 @@ export const useChessStore = create<ChessState>()(
             to,
             isCapture,
             isCheck,
+            promotion,
           };
           const updatedHistory = [...newHistory, newRecord];
           const newIndex = updatedHistory.length - 1;
@@ -191,7 +258,13 @@ export const useChessStore = create<ChessState>()(
           // Determine game end states
           let nextStatus: GameStatus = 'playing';
           let finalWinner: Winner = null;
+          let currentDrawReason: DrawReason = null;
           const statsUpdate = { ...stats };
+
+          console.log("[Chess Debug] Move played:", move.san);
+          console.log("[Chess Debug] isThreefoldRepetition():", activeChess.isThreefoldRepetition());
+          console.log("[Chess Debug] isDraw():", activeChess.isDraw());
+          console.log("[Chess Debug] history count:", activeChess.history().length);
 
           if (activeChess.isCheckmate()) {
             nextStatus = 'checkmate';
@@ -210,6 +283,10 @@ export const useChessStore = create<ChessState>()(
             nextStatus = activeChess.isStalemate() ? 'stalemate' : 'draw';
             finalWinner = 'draw';
             soundType = 'gameover';
+
+            if (activeChess.isStalemate()) currentDrawReason = 'stalemate';
+            else if (activeChess.isThreefoldRepetition()) currentDrawReason = 'threefold';
+            else if (activeChess.isInsufficientMaterial()) currentDrawReason = 'insufficient';
 
             if (gameMode === 'vs-computer') statsUpdate.vsComputer.draw += 1;
             else if (gameMode === 'vs-friend') statsUpdate.vsFriend.draw += 1;
@@ -238,6 +315,10 @@ export const useChessStore = create<ChessState>()(
             }
           }
 
+          const historyEntry = nextStatus !== 'playing'
+            ? createMatchHistoryEntry(gameMode, difficulty, boardOrientation, finalWinner, nextStatus, updatedHistory.length)
+            : null;
+
           set({
             fen: nextFen,
             moveHistory: updatedHistory,
@@ -246,8 +327,10 @@ export const useChessStore = create<ChessState>()(
             checkSquare: newCheckSquare,
             gameStatus: nextStatus,
             winner: finalWinner,
+            drawReason: currentDrawReason,
             timerActive: nextStatus === 'playing',
             stats: statsUpdate,
+            matchHistory: historyEntry ? [historyEntry, ...(get().matchHistory || [])] : get().matchHistory || [],
           });
 
           return true;
@@ -265,7 +348,7 @@ export const useChessStore = create<ChessState>()(
           const prevIndex = currentMoveIndex - 1;
           const prevFen = prevIndex === -1 ? new Chess().fen() : moveHistory[prevIndex].fen;
           const prevRecord = prevIndex === -1 ? null : moveHistory[prevIndex];
-          
+
           localChess.load(prevFen);
 
           set({
@@ -283,7 +366,7 @@ export const useChessStore = create<ChessState>()(
         if (currentMoveIndex < moveHistory.length - 1) {
           const nextIndex = currentMoveIndex + 1;
           const nextRecord = moveHistory[nextIndex];
-          
+
           localChess.load(nextRecord.fen);
 
           set({
@@ -298,12 +381,12 @@ export const useChessStore = create<ChessState>()(
       jumpToMove: (index) => {
         const { moveHistory, gameStatus } = get();
         if (index < -1 || index >= moveHistory.length) return;
-        
+
         const targetFen = index === -1 ? new Chess().fen() : moveHistory[index].fen;
         const record = index === -1 ? null : moveHistory[index];
 
         localChess.load(targetFen);
-        
+
         set({
           currentMoveIndex: index,
           fen: targetFen,
@@ -335,7 +418,7 @@ export const useChessStore = create<ChessState>()(
       },
 
       resignGame: (player) => {
-        const { gameMode, stats, settings, onSoundTrigger } = get();
+        const { gameMode, stats, settings, onSoundTrigger, difficulty, boardOrientation, moveHistory } = get();
         const winner = player === 'white' ? 'black' : 'white';
         const statsUpdate = { ...stats };
 
@@ -351,16 +434,19 @@ export const useChessStore = create<ChessState>()(
           onSoundTrigger('gameover');
         }
 
+        const historyEntry = createMatchHistoryEntry(gameMode, difficulty, boardOrientation, winner, 'resigned', moveHistory.length);
+
         set({
           gameStatus: 'resigned',
           winner,
           timerActive: false,
           stats: statsUpdate,
+          matchHistory: [historyEntry, ...(get().matchHistory || [])],
         });
       },
 
       triggerTimeout: (loser) => {
-        const { gameMode, stats, settings, onSoundTrigger } = get();
+        const { gameMode, stats, settings, onSoundTrigger, difficulty, boardOrientation, moveHistory } = get();
         const winner = loser === 'white' ? 'black' : 'white';
         const statsUpdate = { ...stats };
 
@@ -376,11 +462,14 @@ export const useChessStore = create<ChessState>()(
           onSoundTrigger('gameover');
         }
 
+        const historyEntry = createMatchHistoryEntry(gameMode, difficulty, boardOrientation, winner, 'timeout', moveHistory.length);
+
         set({
           gameStatus: 'timeout',
           winner,
           timerActive: false,
           stats: statsUpdate,
+          matchHistory: [historyEntry, ...(get().matchHistory || [])],
         });
       },
 
@@ -391,7 +480,7 @@ export const useChessStore = create<ChessState>()(
       decrementTimer: (player, amount = 1) => set((state) => {
         const nextTimers = { ...state.timers };
         nextTimers[player] = Math.max(0, nextTimers[player] - amount);
-        
+
         if (nextTimers[player] <= 0) {
           nextTimers[player] = 0;
           // Trigger timeout
@@ -400,7 +489,7 @@ export const useChessStore = create<ChessState>()(
           }, 0);
           return { timers: nextTimers, timerActive: false };
         }
-        
+
         return { timers: nextTimers };
       }),
 
@@ -416,6 +505,7 @@ export const useChessStore = create<ChessState>()(
       partialize: (state) => ({
         stats: state.stats,
         settings: state.settings,
+        matchHistory: state.matchHistory || [],
       }),
     }
   )

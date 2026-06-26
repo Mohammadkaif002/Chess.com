@@ -32,11 +32,19 @@ const OPERA_GAME_MOVES = [
 export default function LandingPage() {
   const router = useRouter();
   const startGame = useChessStore((state) => state.startGame);
+  const matchHistory = useChessStore((state) => state.matchHistory);
+  const clearMatchHistory = useChessStore((state) => state.clearMatchHistory);
 
   // States for configuring a new match
   const [selectedMode, setSelectedMode] = useState<GameMode>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [selectedTime, setSelectedTime] = useState<number | null>(10); // Default 10 minutes
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
 
   // Auto-playing game state
   const [demoChess, setDemoChess] = useState(new Chess());
@@ -406,6 +414,120 @@ export default function LandingPage() {
                 <ArrowRight className="h-4 w-4 ml-1" />
               </button>
 
+            </div>
+          </section>
+        )}
+
+        {/* Match History Section */}
+        {mounted && (
+          <section className="py-16 border-t border-zinc-200 dark:border-zinc-900">
+            <div className="max-w-4xl mx-auto select-none">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-9 w-9 flex items-center justify-center rounded-xl bg-purple-950/40 text-purple-400 border border-purple-900/30">
+                    <History className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-white">Recent Matches</h2>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-500 mt-0.5">Your local game history and performance stats.</p>
+                  </div>
+                </div>
+                {matchHistory && matchHistory.length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (confirm("Are you sure you want to clear your match history?")) {
+                        clearMatchHistory();
+                      }
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900/60 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:border-red-500 hover:bg-red-500/10 hover:text-red-500 transition duration-200 active:scale-95"
+                  >
+                    Clear History
+                  </button>
+                )}
+              </div>
+
+              {matchHistory && matchHistory.length > 0 ? (
+                <div className="grid grid-cols-1 gap-4 max-w-4xl">
+                  {matchHistory.slice(0, 10).map((match) => {
+                    const isComputerGame = match.gameMode === 'vs-computer';
+                    const didWhiteWin = match.winner === 'white';
+                    const isDraw = match.winner === 'draw';
+
+                    // Format outcome messages
+                    let resultBadge = '';
+                    let resultColor = '';
+                    
+                    if (isDraw) {
+                      resultBadge = 'Draw';
+                      resultColor = 'bg-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700';
+                    } else if (isComputerGame) {
+                      // vs Computer, player is White
+                      if (didWhiteWin) {
+                        resultBadge = 'Won';
+                        resultColor = 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30';
+                      } else {
+                        resultBadge = 'Lost';
+                        resultColor = 'bg-rose-950/40 text-rose-400 border-rose-900/30';
+                      }
+                    } else {
+                      // vs Friend (local)
+                      resultBadge = didWhiteWin ? 'White Won' : 'Black Won';
+                      resultColor = 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30';
+                    }
+
+                    const endMethod = match.endStatus === 'checkmate'
+                      ? 'by checkmate'
+                      : match.endStatus === 'resigned'
+                      ? 'by resignation'
+                      : match.endStatus === 'timeout'
+                      ? 'on time'
+                      : 'by draw';
+
+                    return (
+                      <div
+                        key={match.id}
+                        className="rounded-2xl border border-zinc-200 dark:border-zinc-900 bg-zinc-100/50 dark:bg-zinc-900/10 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-zinc-300 dark:border-zinc-800 transition duration-300 backdrop-blur-sm animate-in fade-in slide-in-from-bottom-4 duration-300"
+                      >
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${resultColor}`}>
+                              {resultBadge}
+                            </span>
+                            <span className="text-[10px] font-semibold text-zinc-500 dark:text-zinc-500">
+                              {match.date}
+                            </span>
+                          </div>
+                          <div className="text-sm font-bold text-zinc-800 dark:text-zinc-200 mt-1 flex items-center gap-2">
+                            <span className="text-zinc-900 dark:text-white">{match.whitePlayer}</span>
+                            <span className="text-zinc-500 dark:text-zinc-500 font-normal">vs</span>
+                            <span className="text-zinc-900 dark:text-white">{match.blackPlayer}</span>
+                          </div>
+                          <span className="text-xs text-zinc-600 dark:text-zinc-400">
+                            Ended {endMethod} in {match.movesCount} {match.movesCount === 1 ? 'move' : 'moves'}.
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-500 bg-zinc-200/50 dark:bg-zinc-900/60 px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800/80">
+                            {isComputerGame ? 'Vs Computer' : 'Vs Friend'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-3xl border border-dashed border-zinc-300 dark:border-zinc-800 p-12 text-center flex flex-col items-center justify-center gap-3.5 bg-zinc-100/20 dark:bg-zinc-900/5 backdrop-blur-sm">
+                  <div className="h-12 w-12 flex items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-300/80 dark:border-zinc-850 text-2xl text-zinc-600">
+                    ♔
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">No Match History Yet</h3>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-500 mt-1 max-w-[280px] mx-auto leading-relaxed">
+                      Complete games vs computer or vs friend to see your match history records saved here.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         )}

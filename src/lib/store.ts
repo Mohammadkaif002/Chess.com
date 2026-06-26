@@ -36,6 +36,7 @@ export interface GameSettings {
   soundEnabled: boolean;
   showCoordinates: boolean;
   animationsEnabled: boolean;
+  showPossibleMoves?: boolean;
 }
 
 export interface GameStats {
@@ -156,6 +157,7 @@ export const useChessStore = create<ChessState>()(
         soundEnabled: true,
         showCoordinates: true,
         animationsEnabled: true,
+        showPossibleMoves: true,
       },
 
       stats: {

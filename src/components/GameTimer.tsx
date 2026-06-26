@@ -63,15 +63,15 @@ export default function GameTimer({ color }: GameTimerProps) {
   const isLowTime = timeLeft < 20 && timeLeft > 0;
 
   // Colors & styles based on state
-  let containerStyles = 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-zinc-400 dark:border-zinc-700';
+  let containerStyles = 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border-zinc-300 dark:border-zinc-700';
   if (isMyTurn) {
     if (isLowTime) {
-      containerStyles = 'bg-red-950/40 text-red-400 border-red-500/50 shadow-[0_0_12px_rgba(239,68,68,0.2)] animate-pulse';
+      containerStyles = 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/50 shadow-[0_0_12px_rgba(239,68,68,0.2)] animate-pulse';
     } else {
-      containerStyles = 'bg-emerald-950/20 text-emerald-400 border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.15)]';
+      containerStyles = 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.15)]';
     }
   } else if (isLowTime) {
-    containerStyles = 'bg-red-950/20 text-red-500 border-red-950/40';
+    containerStyles = 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-500 border-red-200 dark:border-red-950/40';
   }
 
   return (

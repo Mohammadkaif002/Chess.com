@@ -5,6 +5,7 @@ import { Chessboard } from 'react-chessboard';
 import { Chess, Square } from 'chess.js';
 import { useChessStore } from '../lib/store';
 import { getBestMove } from '../lib/ai';
+import { Undo2, Redo2 } from 'lucide-react';
 
 const THEMES = {
   emerald: { light: '#eeeed2', dark: '#769656', name: 'Emerald' },
@@ -29,7 +30,12 @@ export default function ChessBoard() {
     currentMoveIndex,
     moveHistory,
     jumpToMove,
+    undoMove,
+    redoMove,
   } = useChessStore();
+
+  const canUndo = currentMoveIndex > -1;
+  const canRedo = currentMoveIndex < moveHistory.length - 1;
 
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [optionSquares, setOptionSquares] = useState<Record<string, React.CSSProperties>>({});
@@ -124,13 +130,16 @@ export default function ChessBoard() {
     const newOptionSquares: Record<string, React.CSSProperties> = {};
     moves.forEach((move) => {
       const isCapture = move.captured !== undefined;
+      const showHints = settings.showPossibleMoves !== false;
       newOptionSquares[move.to] = {
-        background: isCapture
-          ? 'radial-gradient(circle, rgba(239,68,68,0.1) 0%, rgba(239,68,68,0.25) 50%, rgba(239,68,68,0.4) 100%)'
-          : 'radial-gradient(circle, rgba(16,185,129,0.5) 0%, rgba(16,185,129,0.3) 25%, transparent 60%)',
+        background: showHints
+          ? (isCapture
+            ? 'radial-gradient(circle, rgba(239,68,68,0.1) 0%, rgba(239,68,68,0.25) 50%, rgba(239,68,68,0.4) 100%)'
+            : 'radial-gradient(circle, rgba(16,185,129,0.5) 0%, rgba(16,185,129,0.3) 25%, transparent 60%)')
+          : 'transparent',
         borderRadius: '50%',
         cursor: 'pointer',
-        border: isCapture ? '3px solid rgba(239,68,68,0.4)' : undefined,
+        border: (showHints && isCapture) ? '3px solid rgba(239,68,68,0.4)' : undefined,
       };
     });
     
@@ -237,67 +246,91 @@ export default function ChessBoard() {
   };
 
   return (
-    <div className={`relative aspect-square w-full max-w-[580px] overflow-hidden rounded-2xl border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 shadow-2xl ${gameStatus === 'checkmate' ? 'shake-animate' : ''}`}>
-      <Chessboard
-        options={{
-          position: fen,
-          boardOrientation: boardOrientation,
-          onSquareClick: onSquareClick,
-          onPieceDrop: onPieceDrop,
-          squareStyles: getSquareStyles(),
-          darkSquareStyle: { backgroundColor: activeTheme.dark },
-          lightSquareStyle: { backgroundColor: activeTheme.light },
-          showNotation: settings.showCoordinates,
-          animationDurationInMs: settings.animationsEnabled ? 200 : 0,
-          boardStyle: {
-            borderRadius: '12px',
-            boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.5)',
-          }
-        }}
-      />
+    <div className="flex flex-col w-full max-w-[580px] gap-3.5">
+      <div className={`relative aspect-square w-full overflow-hidden rounded-2xl border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 shadow-2xl ${gameStatus === 'checkmate' ? 'shake-animate' : ''}`}>
+        <Chessboard
+          options={{
+            position: fen,
+            boardOrientation: boardOrientation,
+            onSquareClick: onSquareClick,
+            onPieceDrop: onPieceDrop,
+            squareStyles: getSquareStyles(),
+            darkSquareStyle: { backgroundColor: activeTheme.dark },
+            lightSquareStyle: { backgroundColor: activeTheme.light },
+            showNotation: settings.showCoordinates,
+            animationDurationInMs: settings.animationsEnabled ? 200 : 0,
+            boardStyle: {
+              borderRadius: '12px',
+              boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.5)',
+            }
+          }}
+        />
 
-      {/* Promotion Dialog Overlay */}
-      {promotionMove && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="flex flex-col items-center gap-4 rounded-2xl border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-50/90 dark:bg-zinc-950/90 p-6 shadow-2xl backdrop-blur-md">
-            <h3 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-white">Promote Pawn</h3>
-            <div className="flex gap-3">
-              {[
-                { code: 'q', name: 'Queen', symbol: '♕' },
-                { code: 'r', name: 'Rook', symbol: '♖' },
-                { code: 'b', name: 'Bishop', symbol: '♗' },
-                { code: 'n', name: 'Knight', symbol: '♘' },
-              ].map((p) => (
-                <button
-                  key={p.code}
-                  onClick={() => handlePromotionSelect(p.code as 'q' | 'r' | 'b' | 'n')}
-                  className="flex h-16 w-16 flex-col items-center justify-center rounded-xl border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 text-3xl text-zinc-900 dark:text-zinc-100 hover:border-emerald-500 hover:bg-emerald-950/40 hover:text-emerald-400 active:scale-95 transition"
-                >
-                  <span className="leading-none">{p.symbol}</span>
-                  <span className="mt-1 text-xs font-medium tracking-wide uppercase">{p.name}</span>
-                </button>
-              ))}
+        {/* Promotion Dialog Overlay */}
+        {promotionMove && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="flex flex-col items-center gap-4 rounded-2xl border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-50/90 dark:bg-zinc-950/90 p-6 shadow-2xl backdrop-blur-md">
+              <h3 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-white">Promote Pawn</h3>
+              <div className="flex gap-3">
+                {[
+                  { code: 'q', name: 'Queen', symbol: '♕' },
+                  { code: 'r', name: 'Rook', symbol: '♖' },
+                  { code: 'b', name: 'Bishop', symbol: '♗' },
+                  { code: 'n', name: 'Knight', symbol: '♘' },
+                ].map((p) => (
+                  <button
+                    key={p.code}
+                    onClick={() => handlePromotionSelect(p.code as 'q' | 'r' | 'b' | 'n')}
+                    className="flex h-16 w-16 flex-col items-center justify-center rounded-xl border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 text-3xl text-zinc-900 dark:text-zinc-100 hover:border-emerald-500 hover:bg-emerald-950/40 hover:text-emerald-400 active:scale-95 transition"
+                  >
+                    <span className="leading-none">{p.symbol}</span>
+                    <span className="mt-1 text-xs font-medium tracking-wide uppercase">{p.name}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setPromotionMove(null)}
+                className="mt-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:text-zinc-300"
+              >
+                Cancel
+              </button>
             </div>
-            <button
-              onClick={() => setPromotionMove(null)}
-              className="mt-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:text-zinc-300"
-            >
-              Cancel
-            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* AI thinking state overlay */}
-      {isThinking && (
-        <div className="absolute bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-50/80 dark:bg-zinc-950/80 px-4 py-1.5 shadow-lg backdrop-blur-sm">
-          <span className="flex h-2 w-2 relative">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Computer is thinking...</span>
-        </div>
-      )}
+        {/* AI thinking state overlay */}
+        {isThinking && (
+          <div className="absolute bottom-4 right-4 z-40 flex items-center gap-2 rounded-full border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-50/80 dark:bg-zinc-950/80 px-4 py-1.5 shadow-lg backdrop-blur-sm">
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Computer is thinking...</span>
+          </div>
+        )}
+      </div>
+
+      {/* Mobile-only Navigation Toolbar */}
+      <div className="flex lg:hidden items-center justify-center gap-3 w-full px-1 py-0.5 select-none">
+        <button
+          onClick={undoMove}
+          disabled={!canUndo}
+          className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900/60 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 active:scale-95 disabled:opacity-30 disabled:hover:border-zinc-300 dark:disabled:border-zinc-800 disabled:hover:bg-zinc-100 dark:disabled:hover:bg-zinc-900/60 disabled:cursor-not-allowed transition duration-200"
+          title="Undo last move"
+        >
+          <Undo2 className="h-4 w-4" />
+          <span>Undo</span>
+        </button>
+        <button
+          onClick={redoMove}
+          disabled={!canRedo}
+          className="flex-1 flex items-center justify-center gap-2 rounded-xl border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900/60 py-2.5 text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300 active:scale-95 disabled:opacity-30 disabled:hover:border-zinc-300 dark:disabled:border-zinc-800 disabled:hover:bg-zinc-100 dark:disabled:hover:bg-zinc-900/60 disabled:cursor-not-allowed transition duration-200"
+          title="Redo next move"
+        >
+          <Redo2 className="h-4 w-4" />
+          <span>Redo</span>
+        </button>
+      </div>
     </div>
   );
 }

@@ -36,6 +36,10 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
     updateSettings({ animationsEnabled: !settings.animationsEnabled });
   };
 
+  const togglePossibleMoves = () => {
+    updateSettings({ showPossibleMoves: settings.showPossibleMoves !== false ? false : true });
+  };
+
   const handleClearStats = () => {
     const confirmClear = confirm('Are you sure you want to clear your win/loss statistics? This cannot be undone.');
     if (confirmClear) {
@@ -161,7 +165,7 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
                 </div>
 
                 {/* Animations */}
-                <div className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-zinc-900 bg-zinc-100 dark:bg-zinc-100 dark:bg-zinc-900/10 p-3.5">
+                <div className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-zinc-900 bg-zinc-100 dark:bg-zinc-150 dark:bg-zinc-900/10 p-3.5">
                   <div className="flex items-center gap-3">
                     <div className="text-zinc-600 dark:text-zinc-400">
                       <Film className="h-4.5 w-4.5" />
@@ -180,6 +184,31 @@ export default function SettingsDrawer({ isOpen, onClose }: SettingsDrawerProps)
                     <span
                       className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-250 ${
                         settings.animationsEnabled ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Show Possible Moves Hints */}
+                <div className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-zinc-900 bg-zinc-100 dark:bg-zinc-150 dark:bg-zinc-900/10 p-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className="text-zinc-600 dark:text-zinc-400">
+                      <Eye className="h-4.5 w-4.5" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">Possible Moves Hints</span>
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-500">Show visual guidance dots</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={togglePossibleMoves}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-250 ${
+                      settings.showPossibleMoves !== false ? 'bg-emerald-500' : 'bg-zinc-200 dark:bg-zinc-800'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-250 ${
+                        settings.showPossibleMoves !== false ? 'translate-x-4' : 'translate-x-0'
                       }`}
                     />
                   </button>

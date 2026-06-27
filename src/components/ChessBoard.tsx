@@ -181,9 +181,9 @@ export default function ChessBoard() {
     const turnColor = localChessInstance.turn();
     const isPlayerPiece = piece && piece.color === turnColor;
 
-    // If vs computer, restrict clicking opponent pieces (e.g. computer pieces)
+    // If vs computer or online friend, restrict clicking opponent pieces
     let isClickAllowed = isPlayerPiece;
-    if (gameMode === 'vs-computer') {
+    if (gameMode === 'vs-computer' || gameMode === 'vs-friend-online') {
       const userColor = boardOrientation === 'white' ? 'w' : 'b';
       isClickAllowed = isPlayerPiece && piece.color === userColor;
     }
@@ -206,11 +206,13 @@ export default function ChessBoard() {
       return false;
     }
 
-    // Restrict drop of opponent pieces in vs-computer
-    if (gameMode === 'vs-computer') {
+    // Restrict drop of opponent pieces or dragging out of turn
+    if (gameMode === 'vs-computer' || gameMode === 'vs-friend-online') {
       const piece = localChessInstance.get(sourceSquare as Square);
       const userColor = boardOrientation === 'white' ? 'w' : 'b';
+      const turnColor = localChessInstance.turn();
       if (piece && piece.color !== userColor) return false;
+      if (turnColor !== userColor) return false;
     }
 
     // Check for promotion

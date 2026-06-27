@@ -11,7 +11,7 @@ interface GameResultModalProps {
 }
 
 export default function GameResultModal({ onReturnHome }: GameResultModalProps) {
-  const { gameStatus, winner, gameMode, difficulty, resetGame, startGame } = useChessStore();
+  const { gameStatus, winner, gameMode, difficulty, resetGame, startGame, boardOrientation } = useChessStore();
 
   const isGameOver = ['checkmate', 'stalemate', 'draw', 'timeout', 'resigned'].includes(gameStatus);
 
@@ -40,7 +40,8 @@ export default function GameResultModal({ onReturnHome }: GameResultModalProps) 
     if (showDelayedModal) {
       const userWon =
         (gameMode === 'vs-computer' && winner === 'white') ||
-        (gameMode === 'vs-friend' && (winner === 'white' || winner === 'black'));
+        (gameMode === 'vs-friend' && (winner === 'white' || winner === 'black')) ||
+        (gameMode === 'vs-friend-online' && winner === (boardOrientation === 'white' ? 'white' : 'black'));
 
       if (userWon) {
         // Multi-angle confetti burst
@@ -112,9 +113,12 @@ export default function GameResultModal({ onReturnHome }: GameResultModalProps) 
 
   const isUserWinner =
     (gameMode === 'vs-computer' && winner === 'white') ||
-    (gameMode === 'vs-friend');
+    (gameMode === 'vs-friend') ||
+    (gameMode === 'vs-friend-online' && winner === (boardOrientation === 'white' ? 'white' : 'black'));
 
-  const isUserLoser = gameMode === 'vs-computer' && winner === 'black';
+  const isUserLoser =
+    (gameMode === 'vs-computer' && winner === 'black') ||
+    (gameMode === 'vs-friend-online' && winner !== 'draw' && winner !== (boardOrientation === 'white' ? 'white' : 'black'));
 
   return (
     <AnimatePresence>

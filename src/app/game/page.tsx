@@ -43,6 +43,8 @@ export default function GamePage() {
     }
   }, [gameMode, router]);
 
+
+
   if (!gameMode) return null;
 
   // Determine top and bottom players based on board orientation
@@ -54,6 +56,10 @@ export default function GamePage() {
     if (gameMode === 'vs-computer') {
       if (color === 'w') return boardOrientation === 'white' ? 'You' : `Computer (${difficulty})`;
       else return boardOrientation === 'black' ? 'You' : `Computer (${difficulty})`;
+    }
+    if (gameMode === 'vs-friend-online') {
+      if (color === 'w') return boardOrientation === 'white' ? 'You' : 'Opponent';
+      else return boardOrientation === 'black' ? 'You' : 'Opponent';
     }
     return color === 'w' ? 'Player 1 (White)' : 'Player 2 (Black)';
   };
@@ -87,8 +93,12 @@ export default function GamePage() {
           
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <span className="text-xs font-extrabold uppercase tracking-widest px-3 py-1 rounded-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
-              {gameMode === 'vs-computer' ? `VS COMPUTER (${difficulty})` : 'VS FRIEND (LOCAL)'}
+             <span className="text-xs font-extrabold uppercase tracking-widest px-3 py-1 rounded-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400">
+              {gameMode === 'vs-computer'
+                ? `VS COMPUTER (${difficulty})`
+                : gameMode === 'vs-friend-online'
+                ? 'VS FRIEND (ONLINE)'
+                : 'VS FRIEND (LOCAL)'}
             </span>
           </div>
         </header>

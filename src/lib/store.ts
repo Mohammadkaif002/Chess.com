@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Chess } from 'chess.js';
 
-export type GameMode = 'vs-computer' | 'vs-friend' | null;
+export type GameMode = 'vs-computer' | 'vs-friend' | 'vs-friend-online' | null;
 export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert';
 export type GameStatus = 'setup' | 'playing' | 'checkmate' | 'stalemate' | 'draw' | 'timeout' | 'resigned';
 export type DrawReason = 'stalemate' | 'threefold' | 'insufficient' | 'fifty-moves' | null;
@@ -76,14 +76,14 @@ interface ChessState {
   // Actions
   setSoundTriggerCallback: (callback: (type: 'move' | 'capture' | 'check' | 'gameover') => void) => void;
   startGame: (mode: GameMode, timerMinutes: number | null, difficulty?: Difficulty) => void;
-  makeMove: (from: string, to: string, promotion?: string) => boolean;
+  makeMove: (from: string, to: string, promotion?: string, remote?: boolean) => boolean;
   setThinking: (thinking: boolean) => void;
   undoMove: () => void;
   redoMove: () => void;
   jumpToMove: (index: number) => void;
   flipBoard: () => void;
-  resetGame: () => void;
-  resignGame: (player: 'white' | 'black') => void;
+  resetGame: (remote?: boolean) => void;
+  resignGame: (player: 'white' | 'black', remote?: boolean) => void;
   triggerTimeout: (loser: 'white' | 'black') => void;
   updateSettings: (settings: Partial<GameSettings>) => void;
   decrementTimer: (player: 'white' | 'black', amount?: number) => void;
@@ -107,6 +107,10 @@ const createMatchHistoryEntry = (
     if (gameMode === 'vs-computer') {
       if (color === 'w') return boardOrientation === 'white' ? 'You' : `Computer (${difficulty})`;
       else return boardOrientation === 'black' ? 'You' : `Computer (${difficulty})`;
+    }
+    if (gameMode === 'vs-friend-online') {
+      if (color === 'w') return boardOrientation === 'white' ? 'You' : 'Opponent';
+      else return boardOrientation === 'black' ? 'You' : 'Opponent';
     }
     return color === 'w' ? 'Player 1 (White)' : 'Player 2 (Black)';
   };
@@ -196,9 +200,23 @@ export const useChessStore = create<ChessState>()(
         });
       },
 
-      makeMove: (from, to, promotion = 'q') => {
+      makeMove: (from, to, promotion = 'q', remote = false) => {
         const { moveHistory, currentMoveIndex, gameStatus, onSoundTrigger, settings, gameMode, stats, difficulty, boardOrientation } = get();
         if (gameStatus !== 'playing') return false;
+
+        // If vs-friend-online, enforce turn validation locally for non-remote moves
+        if (gameMode === 'vs-friend-online' && !remote) {
+          // Check turn matches user's piece color (which is boardOrientation)
+          const activeChess = new Chess();
+          for (let i = 0; i <= currentMoveIndex; i++) {
+            const record = moveHistory[i];
+            try { activeChess.move({ from: record.from, to: record.to, promotion: record.promotion || 'q' }); } catch { activeChess.load(record.fen); }
+          }
+          const userColor = boardOrientation === 'white' ? 'w' : 'b';
+          if (activeChess.turn() !== userColor) {
+            return false;
+          }
+        }
 
         // If viewing history, do not allow making moves to prevent truncating history
         // The user must return to the present to make a move.
@@ -321,6 +339,13 @@ export const useChessStore = create<ChessState>()(
             ? createMatchHistoryEntry(gameMode, difficulty, boardOrientation, finalWinner, nextStatus, updatedHistory.length)
             : null;
 
+          // If this is a local move and we're in online mode, broadcast it
+          if (gameMode === 'vs-friend-online' && !remote) {
+            import('./multiplayer').then(({ sendMove }) => {
+              sendMove(from, to, promotion);
+            });
+          }
+
           set({
             fen: nextFen,
             moveHistory: updatedHistory,
@@ -402,9 +427,16 @@ export const useChessStore = create<ChessState>()(
         boardOrientation: state.boardOrientation === 'white' ? 'black' : 'white'
       })),
 
-      resetGame: () => {
+      resetGame: (remote = false) => {
         localChess = new Chess();
         const initialSeconds = get().timerConfig || 0;
+
+        if (get().gameMode === 'vs-friend-online' && !remote) {
+          import('./multiplayer').then(({ sendRestart }) => {
+            sendRestart();
+          });
+        }
+
         set({
           gameStatus: 'playing',
           winner: null,
@@ -419,15 +451,24 @@ export const useChessStore = create<ChessState>()(
         });
       },
 
-      resignGame: (player) => {
+      resignGame: (player, remote = false) => {
         const { gameMode, stats, settings, onSoundTrigger, difficulty, boardOrientation, moveHistory } = get();
         const winner = player === 'white' ? 'black' : 'white';
         const statsUpdate = { ...stats };
+
+        if (gameMode === 'vs-friend-online' && !remote) {
+          import('./multiplayer').then(({ sendResign }) => {
+            sendResign();
+          });
+        }
 
         if (gameMode === 'vs-computer') {
           if (winner === 'white') statsUpdate.vsComputer.win += 1;
           else statsUpdate.vsComputer.loss += 1;
         } else if (gameMode === 'vs-friend') {
+          if (winner === 'white') statsUpdate.vsFriend.whiteWin += 1;
+          else statsUpdate.vsFriend.blackWin += 1;
+        } else if (gameMode === 'vs-friend-online') {
           if (winner === 'white') statsUpdate.vsFriend.whiteWin += 1;
           else statsUpdate.vsFriend.blackWin += 1;
         }
@@ -456,6 +497,9 @@ export const useChessStore = create<ChessState>()(
           if (winner === 'white') statsUpdate.vsComputer.win += 1;
           else statsUpdate.vsComputer.loss += 1;
         } else if (gameMode === 'vs-friend') {
+          if (winner === 'white') statsUpdate.vsFriend.whiteWin += 1;
+          else statsUpdate.vsFriend.blackWin += 1;
+        } else if (gameMode === 'vs-friend-online') {
           if (winner === 'white') statsUpdate.vsFriend.whiteWin += 1;
           else statsUpdate.vsFriend.blackWin += 1;
         }

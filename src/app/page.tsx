@@ -6,7 +6,7 @@ import { useChessStore, GameMode, Difficulty } from '../lib/store';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { ThemeToggle } from '../components/ThemeToggle';
-import { Zap, History, Layout, Users, Cpu, Clock, Play, ArrowRight, Quote } from 'lucide-react';
+import { Zap, History, Layout, Users, Cpu, Clock, Play, ArrowRight, Quote, Globe, Copy, Check, Loader2 } from 'lucide-react';
 
 // Famous "Opera House Game" moves to auto-play on the landing page
 const OPERA_GAME_MOVES = [
@@ -39,6 +39,70 @@ export default function LandingPage() {
   const [selectedMode, setSelectedMode] = useState<GameMode>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [selectedTime, setSelectedTime] = useState<number | null>(10); // Default 10 minutes
+
+  const [onlineAction, setOnlineAction] = useState<'host' | 'join'>('host');
+  const [selectedColor, setSelectedColor] = useState<'white' | 'black' | 'random'>('white');
+  const [joinCode, setJoinCode] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [multiplayerState, setMultiplayerState] = useState<any>({
+    gameCode: null,
+    role: null,
+    status: 'disconnected',
+    errorMessage: null,
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let unsubscribe: any = null;
+    import('../lib/multiplayer').then(({ subscribeMultiplayer }) => {
+      unsubscribe = subscribeMultiplayer((state) => {
+        setMultiplayerState(state);
+      });
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  const gameMode = useChessStore((state) => state.gameMode);
+  useEffect(() => {
+    if (multiplayerState.status === 'connected' && gameMode === 'vs-friend-online') {
+      const timer = setTimeout(() => {
+        router.push('/game');
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [multiplayerState.status, gameMode, router]);
+
+  useEffect(() => {
+    if (selectedMode !== 'vs-friend-online') {
+      import('../lib/multiplayer').then(({ disconnectMultiplayer }) => {
+        disconnectMultiplayer();
+      });
+    }
+  }, [selectedMode]);
+
+  const copyRoomCode = () => {
+    if (multiplayerState.gameCode) {
+      navigator.clipboard.writeText(multiplayerState.gameCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleHostGame = () => {
+    import('../lib/multiplayer').then(({ hostGame }) => {
+      hostGame(selectedTime, selectedColor);
+    });
+  };
+
+  const handleJoinGame = () => {
+    import('../lib/multiplayer').then(({ joinGame }) => {
+      joinGame(joinCode);
+    });
+  };
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -277,7 +341,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
             
             {/* Mode: Play vs Computer */}
             <button
@@ -341,6 +405,36 @@ export default function LandingPage() {
               </div>
             </button>
 
+            {/* Mode: Play vs Friend Online */}
+            <button
+              onClick={() => setSelectedMode('vs-friend-online')}
+              className={`flex flex-col items-start gap-4 rounded-3xl border p-6 text-left transition-all duration-300 select-none ${
+                selectedMode === 'vs-friend-online'
+                  ? 'border-emerald-500 bg-emerald-950/5 shadow-[0_8px_30px_rgba(16,185,129,0.08)]'
+                  : 'border-zinc-200 dark:border-zinc-900 bg-zinc-100 dark:bg-zinc-100 dark:bg-zinc-900/20 hover:border-zinc-300/80 dark:border-zinc-300 dark:border-zinc-800/80 hover:bg-zinc-200 dark:bg-zinc-100 dark:bg-zinc-900/30'
+              }`}
+            >
+              <div className={`h-12 w-12 flex items-center justify-center rounded-2xl border ${
+                selectedMode === 'vs-friend-online' ? 'bg-emerald-950/50 text-emerald-400 border-emerald-500/20' : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-800'
+              }`}>
+                <Globe className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Play Online</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-500 leading-relaxed mt-1">
+                  Play with friends from far away. Generate a unique lobby code and share it, or enter a code to join.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 bg-zinc-200 dark:bg-zinc-100 dark:bg-zinc-900/80 px-2 py-0.5 rounded-md border border-zinc-300 dark:border-zinc-800/60">
+                  Online Match
+                </span>
+                <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 bg-zinc-200 dark:bg-zinc-100 dark:bg-zinc-900/80 px-2 py-0.5 rounded-md border border-zinc-300 dark:border-zinc-800/60">
+                  P2P WebRTC
+                </span>
+              </div>
+            </button>
+
           </div>
         </section>
 
@@ -379,40 +473,236 @@ export default function LandingPage() {
               )}
 
               {/* Time Controls */}
-              <div className="flex flex-col gap-3 mb-8">
-                <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
-                  <Clock className="h-4 w-4" />
-                  Time Control
-                </span>
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 bg-zinc-200/50 dark:bg-zinc-100 dark:bg-zinc-900/40 p-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-900">
-                  {timeOptions.map((opt) => (
-                    <button
-                      key={opt.label}
-                      onClick={() => setSelectedTime(opt.value)}
-                      className={`flex flex-col items-center justify-center py-2.5 rounded-xl border transition ${
-                        selectedTime === opt.value
-                          ? 'border-emerald-500 bg-emerald-950/10 text-emerald-400 font-bold'
-                          : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:bg-zinc-900/60'
-                      }`}
-                    >
-                      <span className="text-xs font-bold leading-none">{opt.label}</span>
-                      <span className="text-[9px] font-semibold text-zinc-500 dark:text-zinc-500 mt-1 uppercase tracking-wider">
-                        {opt.desc}
-                      </span>
-                    </button>
-                  ))}
+              {selectedMode !== 'vs-friend-online' && (
+                <div className="flex flex-col gap-3 mb-8">
+                  <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
+                    <Clock className="h-4 w-4" />
+                    Time Control
+                  </span>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 bg-zinc-200/50 dark:bg-zinc-100 dark:bg-zinc-900/40 p-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-900">
+                    {timeOptions.map((opt) => (
+                      <button
+                        key={opt.label}
+                        onClick={() => setSelectedTime(opt.value)}
+                        className={`flex flex-col items-center justify-center py-2.5 rounded-xl border transition ${
+                          selectedTime === opt.value
+                            ? 'border-emerald-500 bg-emerald-950/10 text-emerald-400 font-bold'
+                            : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:bg-zinc-900/60'
+                        }`}
+                      >
+                        <span className="text-xs font-bold leading-none">{opt.label}</span>
+                        <span className="text-[9px] font-semibold text-zinc-500 dark:text-zinc-500 mt-1 uppercase tracking-wider">
+                          {opt.desc}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Action Start Game */}
-              <button
-                onClick={handleStartGame}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 py-3.5 text-sm font-bold text-white hover:from-emerald-400 hover:to-emerald-500 shadow-[0_4px_25px_rgba(16,185,129,0.3)] transition duration-200 active:scale-98"
-              >
-                <Play className="h-4 w-4 fill-white" />
-                Start Match
-                <ArrowRight className="h-4 w-4 ml-1" />
-              </button>
+              {selectedMode !== 'vs-friend-online' && (
+                <button
+                  onClick={handleStartGame}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 py-3.5 text-sm font-bold text-white hover:from-emerald-400 hover:to-emerald-500 shadow-[0_4px_25px_rgba(16,185,129,0.3)] transition duration-200 active:scale-98"
+                >
+                  <Play className="h-4 w-4 fill-white" />
+                  Start Match
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </button>
+              )}
+
+              {/* vs-friend-online Interface */}
+              {selectedMode === 'vs-friend-online' && (
+                <div className="flex flex-col gap-6">
+                  {/* Host vs Join Tabs */}
+                  <div className="grid grid-cols-2 gap-2 bg-zinc-250 dark:bg-zinc-900/60 p-1.5 rounded-xl border border-zinc-300 dark:border-zinc-900">
+                    <button
+                      onClick={() => {
+                        setOnlineAction('host');
+                        setJoinCode('');
+                      }}
+                      className={`py-2 px-1 rounded-lg text-xs font-bold text-center transition ${
+                        onlineAction === 'host'
+                          ? 'bg-zinc-200 dark:bg-zinc-800 text-emerald-400 border border-zinc-350 dark:border-zinc-700/50 shadow-md animate-in fade-in duration-200'
+                          : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-300'
+                      }`}
+                    >
+                      Host a Game
+                    </button>
+                    <button
+                      onClick={() => {
+                        setOnlineAction('join');
+                      }}
+                      className={`py-2 px-1 rounded-lg text-xs font-bold text-center transition ${
+                        onlineAction === 'join'
+                          ? 'bg-zinc-200 dark:bg-zinc-800 text-emerald-400 border border-zinc-350 dark:border-zinc-700/50 shadow-md animate-in fade-in duration-200'
+                          : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-300'
+                      }`}
+                    >
+                      Join a Game
+                    </button>
+                  </div>
+
+                  {onlineAction === 'host' ? (
+                    // Host Settings Interface
+                    <div className="flex flex-col gap-6">
+                      {/* Time Controls */}
+                      <div className="flex flex-col gap-3">
+                        <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
+                          <Clock className="h-4 w-4" />
+                          Time Control
+                        </span>
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 bg-zinc-200/50 dark:bg-zinc-900/40 p-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-900">
+                          {timeOptions.map((opt) => (
+                            <button
+                              key={opt.label}
+                              onClick={() => setSelectedTime(opt.value)}
+                              className={`flex flex-col items-center justify-center py-2.5 rounded-xl border transition ${
+                                selectedTime === opt.value
+                                  ? 'border-emerald-500 bg-emerald-950/10 text-emerald-400 font-bold'
+                                  : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:text-zinc-200 hover:bg-zinc-900/60'
+                              }`}
+                            >
+                              <span className="text-xs font-bold leading-none">{opt.label}</span>
+                              <span className="text-[9px] font-semibold text-zinc-500 dark:text-zinc-500 mt-1 uppercase tracking-wider">
+                                {opt.desc}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Play As Selection */}
+                      <div className="flex flex-col gap-3">
+                        <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400">Play As Color</span>
+                        <div className="grid grid-cols-3 gap-2 bg-zinc-200/50 dark:bg-zinc-900/40 p-1.5 rounded-xl border border-zinc-200 dark:border-zinc-900">
+                          {[
+                            { id: 'white', label: 'White (First)' },
+                            { id: 'black', label: 'Black' },
+                            { id: 'random', label: 'Random' },
+                          ].map((opt) => (
+                            <button
+                              key={opt.id}
+                              onClick={() => setSelectedColor(opt.id as 'white' | 'black' | 'random')}
+                              className={`py-2 px-1 rounded-lg text-xs font-bold text-center transition ${
+                                selectedColor === opt.id
+                                  ? 'bg-zinc-200 dark:bg-zinc-800 text-emerald-400 border border-zinc-350 dark:border-zinc-700/50 shadow-md'
+                                  : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-300'
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Connection Details / Trigger Host */}
+                      {multiplayerState.status === 'disconnected' && (
+                        <button
+                          onClick={handleHostGame}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 py-3.5 text-sm font-bold text-white hover:from-emerald-400 hover:to-emerald-500 shadow-[0_4px_25px_rgba(16,185,129,0.3)] transition duration-200 active:scale-98 animate-in fade-in duration-300"
+                        >
+                          <Play className="h-4 w-4 fill-white" />
+                          Generate Room Code
+                        </button>
+                      )}
+
+                      {multiplayerState.status === 'connecting' && (
+                        <div className="flex flex-col items-center justify-center py-6 gap-3 rounded-2xl bg-zinc-200/20 dark:bg-zinc-900/40 border border-zinc-300 dark:border-zinc-800/80 animate-pulse">
+                          <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
+                          <span className="text-xs font-bold text-zinc-650 dark:text-zinc-400">Initializing room code...</span>
+                        </div>
+                      )}
+
+                      {multiplayerState.status === 'connected' && (
+                        <div className="flex flex-col items-center justify-center py-6 gap-3 rounded-2xl bg-emerald-950/15 border border-emerald-500/30">
+                          <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
+                          <span className="text-xs font-bold text-emerald-400">Guest joined! Launching match...</span>
+                        </div>
+                      )}
+
+                      {multiplayerState.gameCode && (multiplayerState.status === 'connecting' || multiplayerState.status === 'error' || multiplayerState.status === 'disconnected' || (multiplayerState.status === 'connected' && multiplayerState.role === 'host')) && (
+                        // Display Room Code to Share
+                        <div className="flex flex-col gap-3.5 p-5 rounded-2xl border border-zinc-300 dark:border-zinc-800/85 bg-zinc-200/30 dark:bg-zinc-900/20 relative overflow-hidden animate-in slide-in-from-top-4 duration-300 select-text">
+                          <div className="flex justify-between items-center z-10">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-500 uppercase tracking-wider">Share Game Code</span>
+                              <span className="text-2xl font-mono font-black text-zinc-900 dark:text-white tracking-widest mt-1">
+                                {multiplayerState.gameCode}
+                              </span>
+                            </div>
+                            <button
+                              onClick={copyRoomCode}
+                              className={`flex h-10 w-10 items-center justify-center rounded-xl border transition duration-200 active:scale-95 ${
+                                copied
+                                  ? 'bg-emerald-950/40 border-emerald-500/35 text-emerald-400'
+                                  : 'border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400 dark:hover:border-zinc-750'
+                              }`}
+                              title="Copy Code"
+                            >
+                              {copied ? <Check className="h-4.5 w-4.5" /> : <Copy className="h-4.5 w-4.5" />}
+                            </button>
+                          </div>
+                          
+                          <div className="border-t border-zinc-200 dark:border-zinc-900 pt-3 flex items-center gap-2">
+                            <span className="flex h-2 w-2 relative">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-450 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                            </span>
+                            <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400">
+                              Waiting for friend to connect... Keep this window open.
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    // Join Settings Interface
+                    <div className="flex flex-col gap-5">
+                      <div className="flex flex-col gap-2">
+                        <span className="text-xs font-bold text-zinc-650 dark:text-zinc-400">Enter Friend's Game Code</span>
+                        <input
+                          type="text"
+                          maxLength={6}
+                          value={joinCode}
+                          onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                          placeholder="E.G. R2F4T9"
+                          className="w-full text-center tracking-widest text-lg font-mono font-black py-3 rounded-xl border border-zinc-305 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900/60 focus:outline-none focus:border-emerald-500 transition uppercase"
+                        />
+                      </div>
+
+                      {multiplayerState.status === 'connecting' ? (
+                        <div className="flex flex-col items-center justify-center py-6 gap-3 rounded-2xl bg-zinc-200/20 dark:bg-zinc-900/40 border border-zinc-300 dark:border-zinc-800/80 animate-pulse">
+                          <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
+                          <span className="text-xs font-bold text-zinc-650 dark:text-zinc-400">Connecting to host...</span>
+                        </div>
+                      ) : multiplayerState.status === 'connected' ? (
+                        <div className="flex flex-col items-center justify-center py-6 gap-3 rounded-2xl bg-emerald-950/15 border border-emerald-500/30">
+                          <Loader2 className="h-6 w-6 text-emerald-500 animate-spin" />
+                          <span className="text-xs font-bold text-emerald-400">Connected! Starting game...</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleJoinGame}
+                          disabled={joinCode.length !== 6}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 py-3.5 text-sm font-bold text-white hover:from-emerald-400 hover:to-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition duration-200 active:scale-98 shadow-[0_4px_25px_rgba(16,185,129,0.3)]"
+                        >
+                          <Users className="h-4 w-4" />
+                          Join Match
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Network Error Messages */}
+                  {multiplayerState.errorMessage && (
+                    <div className="p-3.5 text-xs font-semibold text-rose-600 dark:text-rose-400 rounded-xl bg-rose-500/10 border border-rose-500/20 text-center animate-in fade-in duration-200">
+                      {multiplayerState.errorMessage}
+                    </div>
+                  )}
+                </div>
+              )}
 
             </div>
           </section>

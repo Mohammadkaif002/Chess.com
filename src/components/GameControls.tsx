@@ -10,6 +10,7 @@ interface GameControlsProps {
 
 export default function GameControls({ onOpenSettings }: GameControlsProps) {
   const {
+    gameMode,
     moveHistory,
     currentMoveIndex,
     gameStatus,
@@ -18,21 +19,30 @@ export default function GameControls({ onOpenSettings }: GameControlsProps) {
     flipBoard,
     resetGame,
     resignGame,
+    boardOrientation,
   } = useChessStore();
 
-  const canUndo = currentMoveIndex > -1;
-  const canRedo = currentMoveIndex < moveHistory.length - 1;
+  const canUndo = gameMode !== 'vs-friend-online' && currentMoveIndex > -1;
+  const canRedo = gameMode !== 'vs-friend-online' && currentMoveIndex < moveHistory.length - 1;
   const isPlaying = gameStatus === 'playing';
 
   const handleResign = () => {
     if (!isPlaying) return;
     const confirmResign = confirm("Are you sure you want to resign?");
     if (confirmResign) {
-      // Resign for White if white orientation, otherwise black.
-      // In local mode, let's assume current turn resigns.
-      // Wait, in vs-computer, the player is White, so player resigns (loses).
-      // Let's resign for White by default or whoever is active.
-      resignGame('white');
+      const playerColor = gameMode === 'vs-friend-online' ? (boardOrientation === 'white' ? 'white' : 'black') : 'white';
+      resignGame(playerColor);
+    }
+  };
+
+  const handleRestart = () => {
+    const confirmRestart = confirm(
+      gameMode === 'vs-friend-online'
+        ? "Are you sure you want to restart? This will reset the board for both players."
+        : "Are you sure you want to restart this match?"
+    );
+    if (confirmRestart) {
+      resetGame();
     }
   };
 
@@ -89,7 +99,7 @@ export default function GameControls({ onOpenSettings }: GameControlsProps) {
           <Settings className="h-4.5 w-4.5" />
         </button>
         <button
-          onClick={resetGame}
+          onClick={handleRestart}
           title="Restart Game"
           className="flex h-10 px-3.5 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 dark:border-emerald-900/30 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-950/40 hover:text-emerald-700 dark:hover:text-emerald-300 hover:border-emerald-300 dark:hover:border-emerald-500/30 transition duration-200 active:scale-95"
         >

@@ -67,7 +67,7 @@ export default function GameResultModal({ onReturnHome }: GameResultModalProps) 
         return () => clearInterval(interval);
       }
     }
-  }, [showDelayedModal, gameMode, winner]);
+  }, [showDelayedModal, gameMode, winner, boardOrientation]);
 
   if (isClosedByUser) {
     return (
@@ -172,7 +172,7 @@ export default function GameResultModal({ onReturnHome }: GameResultModalProps) 
             {/* Actions Panel */}
             <div className="mt-6 flex flex-col gap-3.5 w-full">
               <button
-                onClick={resetGame}
+                onClick={() => resetGame()}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 py-3 text-sm font-bold text-white hover:from-emerald-400 hover:to-emerald-500 shadow-[0_4px_20px_rgba(16,185,129,0.25)] hover:shadow-[0_4px_25px_rgba(16,185,129,0.35)] transition duration-200 active:scale-98"
               >
                 <RefreshCw className="h-4 w-4" />

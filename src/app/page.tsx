@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useChessStore, GameMode, Difficulty } from '../lib/store';
+import type { MultiplayerState } from '../lib/multiplayer';
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { ThemeToggle } from '../components/ThemeToggle';
@@ -44,7 +45,7 @@ export default function LandingPage() {
   const [selectedColor, setSelectedColor] = useState<'white' | 'black' | 'random'>('white');
   const [joinCode, setJoinCode] = useState('');
   const [copied, setCopied] = useState(false);
-  const [multiplayerState, setMultiplayerState] = useState<any>({
+  const [multiplayerState, setMultiplayerState] = useState<MultiplayerState>({
     gameCode: null,
     role: null,
     status: 'disconnected',
@@ -54,7 +55,7 @@ export default function LandingPage() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    let unsubscribe: any = null;
+    let unsubscribe: (() => void) | null = null;
     import('../lib/multiplayer').then(({ subscribeMultiplayer }) => {
       unsubscribe = subscribeMultiplayer((state) => {
         setMultiplayerState(state);
@@ -661,7 +662,7 @@ export default function LandingPage() {
                     // Join Settings Interface
                     <div className="flex flex-col gap-5">
                       <div className="flex flex-col gap-2">
-                        <span className="text-xs font-bold text-zinc-650 dark:text-zinc-400">Enter Friend's Game Code</span>
+                        <span className="text-xs font-bold text-zinc-650 dark:text-zinc-400">Enter Friend&apos;s Game Code</span>
                         <input
                           type="text"
                           maxLength={6}

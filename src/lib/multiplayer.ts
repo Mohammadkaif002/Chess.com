@@ -1,4 +1,12 @@
+import type Peer from 'peerjs';
+import type { DataConnection } from 'peerjs';
 import { useChessStore } from './store';
+
+export type MultiplayerMessage =
+  | { type: 'init-game'; timeControl: number | null; hostColor: 'white' | 'black' }
+  | { type: 'move'; from: string; to: string; promotion?: string }
+  | { type: 'resign' }
+  | { type: 'restart' };
 
 export type MultiplayerState = {
   gameCode: string | null;
@@ -7,8 +15,8 @@ export type MultiplayerState = {
   errorMessage: string | null;
 };
 
-let peerInstance: any = null;
-let activeConnection: any = null;
+let peerInstance: Peer | null = null;
+let activeConnection: DataConnection | null = null;
 let gameCode: string | null = null;
 let role: 'host' | 'guest' | null = null;
 let status: 'disconnected' | 'connecting' | 'connected' | 'error' = 'disconnected';
@@ -60,16 +68,17 @@ const handleDisconnect = (reason: string | null = null) => {
   }
 };
 
-const setupConnectionListeners = (conn: any) => {
-  conn.on('data', (data: any) => {
+const setupConnectionListeners = (conn: DataConnection) => {
+  conn.on('data', (data: unknown) => {
     if (!data || typeof data !== 'object') return;
 
     console.log('[Multiplayer] Received message:', data);
     const store = useChessStore.getState();
+    const msg = data as MultiplayerMessage;
 
-    switch (data.type) {
+    switch (msg.type) {
       case 'init-game': {
-        const { timeControl, hostColor } = data;
+        const { timeControl, hostColor } = msg;
         const guestColor = hostColor === 'white' ? 'black' : 'white';
 
         status = 'connected';
@@ -90,7 +99,7 @@ const setupConnectionListeners = (conn: any) => {
       }
 
       case 'move': {
-        const { from, to, promotion } = data;
+        const { from, to, promotion } = msg;
         store.makeMove(from, to, promotion, true);
         break;
       }
@@ -114,7 +123,7 @@ const setupConnectionListeners = (conn: any) => {
     handleDisconnect('Connection lost with opponent.');
   });
 
-  conn.on('error', (err: any) => {
+  conn.on('error', (err: unknown) => {
     console.error('[Multiplayer] Connection error:', err);
     handleDisconnect('Network connection error.');
   });
@@ -182,20 +191,21 @@ export const hostGame = async (
       setupConnectionListeners(conn);
     });
 
-    peer.on('error', (err: any) => {
+    peer.on('error', (err: unknown) => {
       console.error('[Multiplayer] Peer error:', err);
-      if (err.type === 'unavailable-id') {
+      const peerErr = err as { type?: string; message?: string };
+      if (peerErr.type === 'unavailable-id') {
         // Regenerate code and retry
         console.log('[Multiplayer] ID collision, retrying with new code...');
         hostGame(timeControl, colorPreference);
       } else {
         status = 'error';
-        errorMessage = err.message || 'Failed to host game.';
+        errorMessage = peerErr.message || 'Failed to host game.';
         notifyListeners();
       }
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Multiplayer] Dynamic import of PeerJS failed:', err);
     status = 'error';
     errorMessage = 'Failed to load networking library.';
@@ -239,14 +249,14 @@ export const joinGame = async (code: string) => {
       setupConnectionListeners(conn);
     });
 
-    peer.on('error', (err: any) => {
+    peer.on('error', (err: unknown) => {
       console.error('[Multiplayer] Guest Peer error:', err);
       status = 'error';
       errorMessage = 'Room not found or server unreachable. Please check the code.';
       notifyListeners();
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[Multiplayer] Dynamic import of PeerJS failed:', err);
     status = 'error';
     errorMessage = 'Failed to load networking library.';
